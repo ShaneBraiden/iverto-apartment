@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "96493681710",
+    "project_id": "iverto-gate",
+    "storage_bucket": "iverto-gate.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:96493681710:android:1dfe4d6d9f1fc9b1a933bf",
+        "android_client_info": {
+          "package_name": "com.iverto.gate"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAtGG1C0NQp33j303Skg-8B7x8LeGGboFI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

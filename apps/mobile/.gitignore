@@ -1,0 +1,22 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+
+# Native projects are checked in — this is the bare workflow (§2), so the
+# android/ directory is source, not output. Only its build products are not.
+android/build/
+android/app/build/
+android/.gradle/
+android/.cxx/
+android/local.properties
+
+# The API address this build points at. Local to a machine; `.env.example` is
+# the committed copy. Nothing secret belongs in either — EXPO_PUBLIC_ values
+# are inlined into the JS bundle and ship inside the APK.
+.env
+.env.local
+
+*.orig.*
+.DS_Store

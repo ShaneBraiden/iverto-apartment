@@ -1,0 +1,10 @@
+# Build artifacts
+*.apk
+*.aab
+
+# Local scratch / planning docs and dev-only builds - not for GitHub
+Dev/
+
+# OS files
+.DS_Store
+Thumbs.db
