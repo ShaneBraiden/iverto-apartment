@@ -40,7 +40,7 @@ import {
   spacing,
   type,
 } from '@/theme';
-import { statusInfo } from '@/lib/status';
+import { invoiceInfo, paymentInfo, statusInfo } from '@/lib/status';
 import { errorCopy } from '@/lib/errors';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -349,11 +349,22 @@ export function Field({
 export function StatusPill({
   status,
   small,
+  kind,
 }: {
   status: string;
   small?: boolean;
+  /**
+   * Which vocabulary `status` is in. Needed only where the words collide —
+   * an invoice's `PENDING` is not an approval's.
+   */
+  kind?: 'invoice' | 'payment';
 }) {
-  const m = statusInfo(status);
+  const m =
+    kind === 'invoice'
+      ? invoiceInfo(status)
+      : kind === 'payment'
+        ? paymentInfo(status)
+        : statusInfo(status);
   const live = m.tone === 'active' || m.tone === 'pending';
   return (
     /* The pill is the trailing item in rows whose leading item is a name or a

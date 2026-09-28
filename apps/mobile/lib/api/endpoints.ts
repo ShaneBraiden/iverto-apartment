@@ -29,6 +29,7 @@
 import { ApiError, buildUrl, del, get, idempotencyKey, patch, post, put, request } from './http';
 import { UPLOAD_TIMEOUT_MS } from './config';
 import { getAccessToken } from './tokens';
+import { File, Paths } from 'expo-file-system';
 import type {
   ApprovalRequest,
   Context,
@@ -38,10 +39,14 @@ import type {
   DirectoryUnit,
   EntryEvent,
   EntryEventResult,
+  Invoice,
+  InvoiceDetail,
   Page,
   Passcode,
   PasscodeVerification,
+  PaymentOrder,
   Platform,
+  RazorpayResult,
   SocietyRole,
   Staff,
   StaffType,
@@ -561,6 +566,98 @@ export const createPasscode = (unitId: string, input: { hours: number; maxUses: 
 /** `DELETE /mobile/units/{unitId}/passcodes/{id}` — revoke, not delete. */
 export const revokePasscode = (unitId: string, passcodeId: string) =>
   del<unknown>(`/mobile/units/${unitId}/passcodes/${passcodeId}`);
+
+/* ----------------------------------------------------------------- Billing */
+
+/**
+ * `GET /mobile/units/{unitId}/billing/invoices` — every bill this home has had.
+ *
+ * Newest first and unpaginated by design: one row a month plus the odd
+ * immediate charge. The screen sections it into "to pay" and "history".
+ */
+export const getInvoices = async (unitId: string) =>
+  (await get<Invoice[]>(`/mobile/units/${unitId}/billing/invoices`)) ?? [];
+
+/** `GET /mobile/units/{unitId}/billing/invoices/{id}` — line items and every payment attempt. */
+export async function getInvoice(unitId: string, invoiceId: string): Promise<InvoiceDetail> {
+  const res = await get<InvoiceDetail>(`/mobile/units/${unitId}/billing/invoices/${invoiceId}`);
+  return { ...res, lineItems: res?.lineItems ?? [], payments: res?.payments ?? [] };
+}
+
+/**
+ * `POST .../billing/invoices/{id}/pay/order` — open a Razorpay order for what
+ * is outstanding *now*.
+ *
+ * Called immediately before the checkout opens and never cached: an admin can
+ * record a part-payment between the resident opening the bill and tapping pay,
+ * and only the server knows the remainder. The key belongs to the tap, so a
+ * double-tap or a retry after a dropped connection gets the same order back
+ * rather than a second one.
+ */
+export const createPaymentOrder = (unitId: string, invoiceId: string, key: string) =>
+  post<PaymentOrder>(
+    `/mobile/units/${unitId}/billing/invoices/${invoiceId}/pay/order`,
+    undefined,
+    { idempotencyKey: key },
+  );
+
+/**
+ * `POST .../billing/invoices/{id}/pay/verify` — what actually applies the money.
+ *
+ * The body is the SDK's success payload, snake_case and untouched. Keyed on the
+ * Razorpay payment id, which is the one thing that is the same on every retry of
+ * this verification and different for every other one — and the server treats a
+ * repeat for an already-applied payment as a no-op anyway.
+ */
+export const verifyPayment = (unitId: string, invoiceId: string, result: RazorpayResult) =>
+  post<InvoiceDetail>(
+    `/mobile/units/${unitId}/billing/invoices/${invoiceId}/pay/verify`,
+    {
+      razorpay_order_id: result.razorpay_order_id,
+      razorpay_payment_id: result.razorpay_payment_id,
+      razorpay_signature: result.razorpay_signature,
+    },
+    { idempotencyKey: `verify-${result.razorpay_payment_id}` },
+  ).then((res) => ({ ...res, lineItems: res?.lineItems ?? [], payments: res?.payments ?? [] }));
+
+/**
+ * `GET .../billing/invoices/{id}/receipt` — the society's PDF, saved to the cache.
+ *
+ * Downloaded rather than opened by URL because the route wants a bearer token
+ * and neither a browser nor the share sheet will send one. Overwrites any
+ * earlier copy: the receipt of a part-paid bill changes when the rest is paid.
+ * Returns the local `file://` URI.
+ */
+export async function downloadReceipt(
+  unitId: string,
+  invoiceId: string,
+  invoiceNumber: string,
+): Promise<string> {
+  const token = getAccessToken();
+  if (!token) throw new ApiError('You are signed out.', 401, 'no_session');
+  const safeName = invoiceNumber.replace(/[^A-Za-z0-9._-]/g, '_');
+  try {
+    const file = await File.downloadFileAsync(
+      buildUrl(`/mobile/units/${unitId}/billing/invoices/${invoiceId}/receipt`),
+      new File(Paths.cache, `receipt-${safeName}.pdf`),
+      {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/pdf' },
+        idempotent: true,
+      },
+    );
+    return file.uri;
+  } catch (e) {
+    /* The native download reports a non-2xx as a bare message with the status
+       somewhere inside it; lift it out so `errorCopy` can word it. */
+    const text = e instanceof Error ? e.message : '';
+    const status = Number(/\b([45]\d\d)\b/.exec(text)?.[1] ?? 0);
+    throw new ApiError(
+      status ? 'The receipt could not be fetched.' : 'Could not reach the server. Check your connection.',
+      status,
+      'receipt',
+    );
+  }
+}
 
 /* -------------------------------------------------------------------- Gates */
 

@@ -390,3 +390,100 @@ export type PasscodeVerification = {
   /** The flat the code belongs to, on a successful check. */
   unitId?: string | null;
 };
+
+/* ---------------------------------------------------------------- Billing */
+
+export type InvoiceStatus = 'PENDING' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+
+/** `MONTHLY_COMBINED` is the regular bill; `IMMEDIATE` is one urgent ad hoc charge. */
+export type InvoiceSource = 'MONTHLY_COMBINED' | 'IMMEDIATE';
+
+export type LineItemCategory = 'MAINTENANCE' | 'UTILITY' | 'FINE' | 'AMENITY' | 'OTHER';
+
+/**
+ * A row of `GET /mobile/units/{unitId}/billing/invoices`.
+ *
+ * Amounts are **rupees** here. The one place the service speaks paise is the
+ * Razorpay order (`PaymentOrder.amount`), and the two are never mixed.
+ */
+export type Invoice = {
+  id: string;
+  invoiceNumber: string;
+  unitId: string;
+  unitNumber?: string | null;
+  buildingName?: string | null;
+  billingCycleId?: string | null;
+  /** "2026-09" — the month the bill is for. */
+  periodLabel?: string | null;
+  totalAmount: number;
+  amountPaid: number;
+  status: InvoiceStatus;
+  /** A calendar date, `YYYY-MM-DD`, not an instant. */
+  dueDate: string;
+  generatedAt: string;
+  paidAt?: string | null;
+};
+
+export type InvoiceLineItem = {
+  id: string;
+  invoiceId: string;
+  description: string;
+  category: LineItemCategory;
+  amount: number;
+  adhocChargeId?: string | null;
+  billingPlanId?: string | null;
+};
+
+export type PaymentMethod = 'RAZORPAY' | 'MANUAL' | 'OFFLINE';
+export type PaymentStatus = 'CREATED' | 'SUCCESS' | 'FAILED' | 'REFUNDED';
+
+/** Every attempt against an invoice, not only the one that went through. */
+export type Payment = {
+  id: string;
+  invoiceId: string;
+  unitId: string;
+  amount: number;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  razorpayOrderId?: string | null;
+  razorpayPaymentId?: string | null;
+  paidByUserId?: string | null;
+  paidByName?: string | null;
+  paidByEmail?: string | null;
+  paidByRole?: 'OWNER' | 'TENANT' | 'FAMILY' | 'SOCIETY_ADMIN' | 'UNKNOWN' | null;
+  /** Cheque number or transfer reference on an admin-recorded payment. */
+  note?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+};
+
+/** `GET /mobile/units/{unitId}/billing/invoices/{id}` — also what `pay/verify` answers. */
+export type InvoiceDetail = Omit<Invoice, 'unitNumber' | 'buildingName' | 'periodLabel'> & {
+  societyId?: string;
+  source: InvoiceSource;
+  /* Not in the documented detail example, but present on the list row — kept
+     optional so a deployment that sends them is read. */
+  unitNumber?: string | null;
+  buildingName?: string | null;
+  periodLabel?: string | null;
+  lineItems: InvoiceLineItem[];
+  payments: Payment[];
+};
+
+/** `POST .../pay/order` — exactly what the Razorpay SDK is opened with. */
+export type PaymentOrder = {
+  orderId: string;
+  /** **Paise**, already computed server-side. Never re-derived on the client. */
+  amount: number;
+  currency: string;
+  /** Razorpay's publishable key. Not a secret. */
+  keyId: string;
+  invoiceNumber: string;
+};
+
+/** The Razorpay SDK's success payload, passed to `pay/verify` untouched. */
+export type RazorpayResult = {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+};

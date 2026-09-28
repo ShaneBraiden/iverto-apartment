@@ -1,9 +1,9 @@
 /**
  * The resident tab tree.
  *
- * Four tabs, and their order is the order of urgency: the thing you must
- * answer, the people you expect, the record of both, and the rules that govern
- * them. Nothing here is reachable without a UNIT context — the router picks
+ * Five tabs, and their order is the order of urgency: the thing you must
+ * answer, the people you expect, what the home owes, the record of the gate,
+ * and the rules that govern it. Nothing here is reachable without a UNIT context — the router picks
  * this subtree only for one (see `app/index.tsx`).
  */
 import React from 'react';
@@ -12,6 +12,7 @@ import { tabIcon, useTabScreenOptions } from '@/components/TabBar';
 import { useAuth } from '@/lib/auth';
 import * as api from '@/lib/api';
 import { keys, useQuery } from '@/lib/api';
+import { isPayable } from '@/lib/billing';
 
 export default function ResidentLayout() {
   const options = useTabScreenOptions();
@@ -35,6 +36,16 @@ export default function ResidentLayout() {
   );
   const count = pending.data?.length ?? 0;
 
+  /* Bills still open — the same cache entry the Bills tab reads, refreshed by
+     every billing push (they invalidate the unit). A dot of work to do, not a
+     running total of money: that belongs on the tab itself. */
+  const invoices = useQuery(
+    keys.invoices(unitId ?? ''),
+    () => api.getInvoices(unitId!),
+    { enabled: !!unitId },
+  );
+  const openBills = (invoices.data ?? []).filter(isPayable).length;
+
   if (!unitId) return <Redirect href="/" />;
 
   return (
@@ -50,6 +61,14 @@ export default function ResidentLayout() {
       <Tabs.Screen
         name="staff"
         options={{ title: 'Staff', tabBarIcon: tabIcon('people-outline') }}
+      />
+      <Tabs.Screen
+        name="billing"
+        options={{
+          title: 'Bills',
+          tabBarIcon: tabIcon('receipt-outline'),
+          tabBarBadge: openBills || undefined,
+        }}
       />
       <Tabs.Screen
         name="log"

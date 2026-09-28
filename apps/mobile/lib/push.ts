@@ -81,7 +81,10 @@ export type PushType =
   | 'DELIVERY_APPROVAL'
   | 'DELIVERY_ARRIVED'
   | 'DELIVERY_SILENT'
-  | 'STAFF_MOVEMENT';
+  | 'STAFF_MOVEMENT'
+  | 'BILL_GENERATED'
+  | 'PAYMENT_DUE'
+  | 'PAYMENT_CONFIRMED';
 
 type ChannelSpec = {
   id: string;
@@ -91,8 +94,27 @@ type ChannelSpec = {
   /** Null is a silent channel. `undefined` would mean "the system default". */
   sound: string | null;
   vibrate: number[] | null;
-  /** Where a tap on this kind of push should land. */
-  route: string;
+  /**
+   * Where a tap on this kind of push should land. A function for the pushes
+   * that name one thing — a bill — so the tap opens that thing, not its list.
+   */
+  route: string | ((data: PushData) => string);
+};
+
+/** The invoice a billing push is about, or the bills tab when it names none. */
+const invoiceRoute = (data: PushData) =>
+  typeof data.invoiceId === 'string' && data.invoiceId
+    ? `/invoice/${encodeURIComponent(data.invoiceId)}`
+    : '/resident/billing';
+
+const BILLING: ChannelSpec = {
+  id: 'billing',
+  name: 'Bills and payments',
+  description: 'A new maintenance bill, a reminder that one is due, or a payment being applied.',
+  importance: Notifications.AndroidImportance.DEFAULT,
+  sound: 'default',
+  vibrate: [0, 200],
+  route: invoiceRoute,
 };
 
 /**
@@ -159,6 +181,12 @@ const CHANNELS: Record<PushType, ChannelSpec> = {
     vibrate: null,
     route: '/resident/staff',
   },
+  /* §3.12.8. Money, not the door: an ordinary notification with a sound, never
+     the MAX channel — a bill is not worth waking a house for. All three carry
+     the `invoiceId` a tap opens. */
+  BILL_GENERATED: BILLING,
+  PAYMENT_DUE: BILLING,
+  PAYMENT_CONFIRMED: BILLING,
 };
 
 /**
@@ -194,6 +222,7 @@ type PushData = Record<string, unknown> & {
   unitId?: string;
   gateId?: string;
   societyId?: string;
+  invoiceId?: string;
 };
 
 function dataOf(notification: Notifications.Notification): PushData {
@@ -433,11 +462,18 @@ export function usePushNotifications(options: {
       const home = list.find((c) => c.type === 'UNIT' && c.unitId === data.unitId);
       /* Only if they still hold it. A push can outlive a tenancy. */
       if (home) choose(home.id);
+    } else if (spec.id === 'billing') {
+      /* Billing pushes name the invoice, not always the home. With exactly one
+         home there is no guess to make; with several, the invoice screen
+         loads under whichever is active and the front door handles the rest. */
+      const homes = list.filter((c) => c.type === 'UNIT');
+      if (homes.length === 1) choose(homes[0].id);
     }
 
     /* `navigate`, not `push`: tapping three delivery alerts should not build
        a stack of three identical log screens to back out of. */
-    router.navigate(spec.route as never);
+    const route = typeof spec.route === 'function' ? spec.route(data) : spec.route;
+    router.navigate(route as never);
   }, []);
 
   useEffect(() => {

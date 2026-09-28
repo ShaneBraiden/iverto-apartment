@@ -12,6 +12,10 @@ import type {
   Direction,
   EntryEvent,
   EntryEventResult,
+  InvoiceStatus,
+  LineItemCategory,
+  PaymentMethod,
+  PaymentStatus,
   Platform,
   StaffType,
 } from '@/types';
@@ -328,6 +332,101 @@ export function entrySubtitle(event: Pick<EntryEvent, 'subjectType' | 'platform'
   if (event.eventSource) parts.push(SOURCE_LABEL[event.eventSource] ?? humanise(event.eventSource));
   return parts.join(' · ');
 }
+
+/* ---------------------------------------------------------------- Billing */
+
+const INVOICE_TONE: Record<InvoiceStatus, Tone> = {
+  PENDING: 'pending',
+  PARTIALLY_PAID: 'active',
+  PAID: 'approved',
+  OVERDUE: 'rejected',
+  CANCELLED: 'expired',
+};
+
+const INVOICE_LABEL: Record<InvoiceStatus, string> = {
+  /* "Due", not "Pending": PENDING already means "waiting on you at the gate"
+     everywhere else in this app, and a bill is not somebody at the door. */
+  PENDING: 'Due',
+  PARTIALLY_PAID: 'Part paid',
+  PAID: 'Paid',
+  OVERDUE: 'Overdue',
+  CANCELLED: 'Cancelled',
+};
+
+/**
+ * An invoice status, drawn.
+ *
+ * Kept apart from `statusInfo` on purpose — `PENDING` is a bill here and a
+ * visitor there, and one lookup table for both would give one of them the
+ * other's words. `StatusPill kind="invoice"` reads this one.
+ */
+export function invoiceInfo(status: InvoiceStatus | string) {
+  const tone = INVOICE_TONE[status as InvoiceStatus] ?? 'neutral';
+  const style = TONE_STYLE[tone];
+  return {
+    tone,
+    label: INVOICE_LABEL[status as InvoiceStatus] ?? humanise(status),
+    explainer: '',
+    ...style,
+    icon:
+      tone === 'approved'
+        ? 'checkmark-circle-outline'
+        : tone === 'rejected'
+          ? 'alert-circle-outline'
+          : tone === 'expired'
+            ? 'close-circle-outline'
+            : 'receipt-outline',
+  };
+}
+
+const PAYMENT_TONE: Record<PaymentStatus, Tone> = {
+  CREATED: 'expired',
+  SUCCESS: 'approved',
+  FAILED: 'rejected',
+  REFUNDED: 'neutral',
+};
+
+const PAYMENT_LABEL: Record<PaymentStatus, string> = {
+  /* An order nobody finished paying. It had no effect on the bill, so it is
+     worded as what it was rather than as something still in progress. */
+  CREATED: 'Not completed',
+  SUCCESS: 'Paid',
+  FAILED: 'Failed',
+  REFUNDED: 'Refunded',
+};
+
+export function paymentInfo(status: PaymentStatus | string) {
+  const tone = PAYMENT_TONE[status as PaymentStatus] ?? 'neutral';
+  return {
+    tone,
+    label: PAYMENT_LABEL[status as PaymentStatus] ?? humanise(status),
+    explainer: '',
+    ...TONE_STYLE[tone],
+  };
+}
+
+const METHOD_LABEL: Record<PaymentMethod, string> = {
+  RAZORPAY: 'Online',
+  MANUAL: 'Recorded by office',
+  OFFLINE: 'Cash / cheque',
+};
+
+export const paymentMethodLabel = (m: PaymentMethod | string) =>
+  METHOD_LABEL[m as PaymentMethod] ?? humanise(m);
+
+const CATEGORY: Record<LineItemCategory, { label: string; icon: string }> = {
+  MAINTENANCE: { label: 'Maintenance', icon: 'construct-outline' },
+  UTILITY: { label: 'Utility', icon: 'water-outline' },
+  FINE: { label: 'Fine', icon: 'alert-circle-outline' },
+  AMENITY: { label: 'Amenity', icon: 'barbell-outline' },
+  OTHER: { label: 'Other', icon: 'pricetag-outline' },
+};
+
+export const lineItemLabel = (c: LineItemCategory | string) =>
+  CATEGORY[c as LineItemCategory]?.label ?? humanise(c);
+
+export const lineItemIcon = (c: LineItemCategory | string) =>
+  CATEGORY[c as LineItemCategory]?.icon ?? 'pricetag-outline';
 
 /** `LEAVE_AT_GATE` → `Leave at gate`, for anything this build does not know. */
 function humanise(value: string) {

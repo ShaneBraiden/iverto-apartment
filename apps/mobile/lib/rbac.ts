@@ -33,7 +33,9 @@ export type Action =
   | 'complaint.create'
   | 'complaint.manage'
   | 'guard.roster'
-  | 'directory.read';
+  | 'directory.read'
+  | 'billing.view'
+  | 'billing.pay';
 
 /** `"approval.decide@UNIT"` — an action bound to the scope it applies in. */
 export type Grant = `${Action}@${ScopeType}`;
@@ -56,6 +58,8 @@ export const ROLE_GRANTS: Record<Role, Grant[]> = {
     'entry.view@UNIT',
     'member.invite@UNIT',
     'complaint.create@UNIT',
+    'billing.view@UNIT',
+    'billing.pay@UNIT',
   ],
   TENANT: [
     'approval.decide@UNIT',
@@ -64,10 +68,19 @@ export const ROLE_GRANTS: Record<Role, Grant[]> = {
     'delivery_perm.edit@UNIT',
     'entry.view@UNIT',
     'complaint.create@UNIT',
+    'billing.view@UNIT',
+    'billing.pay@UNIT',
   ],
   /* Family members decide and invite, but do not restructure the household:
-     no staff assignment, no delivery rules, no inviting further members. */
-  FAMILY: ['approval.decide@UNIT', 'passcode.create@UNIT', 'entry.view@UNIT'],
+     no staff assignment, no delivery rules, no inviting further members.
+     They can see the household's bills but not pay them — the service refuses
+     `billing.pay` for FAMILY with a 403. */
+  FAMILY: [
+    'approval.decide@UNIT',
+    'passcode.create@UNIT',
+    'entry.view@UNIT',
+    'billing.view@UNIT',
+  ],
   GUARD,
   GUARD_SUPERVISOR: [...GUARD, 'guard.roster@SOCIETY', 'entry.view@SOCIETY'],
   SOCIETY_ADMIN: [

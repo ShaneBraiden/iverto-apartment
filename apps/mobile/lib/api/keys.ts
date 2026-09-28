@@ -30,6 +30,11 @@ export const keys = {
   unitStaffRoster: (unitId: string) => ['unit', unitId, 'roster'] as const,
   deliveryPermissions: (unitId: string) => ['unit', unitId, 'delivery-permissions'] as const,
   passcodes: (unitId: string) => ['unit', unitId, 'passcodes'] as const,
+  /* Under the unit, so a billing push (which invalidates the unit) refreshes
+     both the list and whichever bill is open. */
+  invoices: (unitId: string) => ['unit', unitId, 'invoices'] as const,
+  invoice: (unitId: string, invoiceId: string) =>
+    ['unit', unitId, 'invoices', invoiceId] as const,
 
   /* Gate scope — the guard shell */
   gatePending: (gateId: string) => ['gate', gateId, 'pending'] as const,

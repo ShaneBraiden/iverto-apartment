@@ -43,6 +43,7 @@ import { keys, useMutation, useQuery } from '@/lib/api';
 import { useUnitContext } from '@/lib/auth';
 import { relative } from '@/lib/datetime';
 import { staffTypeIcon, staffTypeLabel } from '@/lib/status';
+import { daysUntil, dueLabel, invoiceTitle, isPayable, outstanding, rupees } from '@/lib/billing';
 
 export default function ResidentHome() {
   const context = useUnitContext();
@@ -55,6 +56,14 @@ export default function ResidentHome() {
   const eventsQuery = useQuery(keys.unitEvents(unitId), () =>
     api.getUnitEntryEvents(unitId, 1, 20),
   );
+
+  /* Same entry as the Bills tab and its badge. */
+  const invoicesQuery = useQuery(keys.invoices(unitId), () => api.getInvoices(unitId));
+  const openBills = (invoicesQuery.data ?? [])
+    .filter(isPayable)
+    .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
+  const owed = openBills.reduce((n, i) => n + outstanding(i), 0);
+  const billLate = openBills.some((i) => i.status === 'OVERDUE' || daysUntil(i.dueDate) < 0);
 
   const pending = pendingQuery.data ?? [];
   const staff = staffQuery.data ?? [];
@@ -189,6 +198,30 @@ export default function ResidentHome() {
             note={context.buildingName ?? context.sublabel}
           />
         )}
+
+        {/* A bill is the second thing that cannot wait, after the gate — but
+            only when there is one, and only as one line and a way to it. */}
+        {!firstLoad && openBills.length ? (
+          <Card padded={false}>
+            <View style={{ padding: spacing.sm }}>
+              <ListTile
+                icon={billLate ? 'alert-circle-outline' : 'receipt-outline'}
+                tint={billLate ? colors.dangerBg : colors.warningBg}
+                title={`${rupees(owed)} to pay`}
+                subtitle={
+                  openBills.length === 1
+                    ? `${invoiceTitle(openBills[0])} · ${dueLabel(openBills[0])}`
+                    : `${openBills.length} bills · ${dueLabel(openBills[0])}`
+                }
+                onPress={() =>
+                  openBills.length === 1
+                    ? router.push({ pathname: '/invoice/[id]', params: { id: openBills[0].id } })
+                    : router.navigate('/resident/billing')
+                }
+              />
+            </View>
+          </Card>
+        ) : null}
 
         {firstLoad ? null : (
           <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'stretch' }}>
